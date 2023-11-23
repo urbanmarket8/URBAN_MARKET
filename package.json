@@ -1,0 +1,27 @@
+{
+  "name": "urban_market",
+  "version": "1.0.0",
+  "description": "Aims to streamline the process of buying products from local shops",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/urbanmarket8/URBAN_MARKET.git"
+  },
+  "author": "NabilSalman",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/urbanmarket8/URBAN_MARKET/issues"
+  },
+  "homepage": "https://github.com/urbanmarket8/URBAN_MARKET#readme",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.1"
+  }
+}
