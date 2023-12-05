@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         unique: true,
     },
+    isVerified: {
+        type: Boolean,
+        default: false,
+    },
     username: {
         type: String,
         unique: true,
@@ -46,6 +50,10 @@ const userSchema = new mongoose.Schema({
             validator: (value) => /^\d{10}$/.test(value),
             message: 'Invalid phone number format',
         },
+    },
+    is_owner: {
+        type: Boolean,
+        default: false,
     },
     status: {
         type: String,
