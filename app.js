@@ -14,9 +14,14 @@ app.use(express.urlencoded({ extended: true }));
 const authRouter = require('./routes/auth');
 const productRouter = require('./routes/products');
 const shopRouter = require('./routes/shops');
+const orderRouter = require('./routes/order');
+const cartRouter = require('./routes/cart');
+
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/product', productRouter);
 app.use('/api/v1/shop', shopRouter);
+app.use('/api/v1/orders', orderRouter);
+app.use('/api/v1/cart', cartRouter);
 
 // Start the server
 const PORT = process.env.PORT || 3000;
