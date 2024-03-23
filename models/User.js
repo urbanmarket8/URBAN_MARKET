@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema({
     },
     verify_token: {
         type: String,
-        unique: true,
+        unique: false,
     },
     isVerified: {
         type: Boolean,
@@ -25,7 +25,6 @@ const userSchema = new mongoose.Schema({
     username: {
         type: String,
         unique: true,
-        required: true,
         trim: true,
     },
     password: {
@@ -46,10 +45,10 @@ const userSchema = new mongoose.Schema({
     phone_number: {
         type: String,
         trim: true,
-        validate: {
-            validator: (value) => /^\d{10}$/.test(value),
-            message: 'Invalid phone number format',
-        },
+        // validate: {
+        //     validator: (value) => /^\d{10}$/.test(value),
+        //     message: 'Invalid phone number format',
+        // },
     },
     is_owner: {
         type: Boolean,
@@ -68,7 +67,7 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
-});
+}, { strict: false });
 
 // Hash the password before saving to the database
 userSchema.pre('save', async function (next) {

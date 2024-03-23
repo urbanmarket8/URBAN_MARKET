@@ -3,20 +3,27 @@ const jwt = require('jsonwebtoken');
 const { JWT_SECRET } = process.env;
 
 const authenticate = (req, res, next) => {
-    const authToken = req.headers.authorization;
+    const authTokenHeader = req?.headers?.authorization;
 
-    if (!authToken) {
+    if (!authTokenHeader) {
         return res.status(401).json({ message: 'Unauthorized - Missing Authorization Header' });
+    }
+
+    const [bearer, authToken] = authTokenHeader.split(' ');
+
+    if (bearer !== 'Bearer' || !authToken) {
+        return res.status(401).json({ message: 'Unauthorized - Invalid Authorization Header Format' });
     }
 
     try {
         const decoded = jwt.verify(authToken, JWT_SECRET);
-        req.user = decoded; // Attach user information to the request object
+        req.user = decoded;
         next();
     } catch (error) {
         console.error('JWT Verification Error:', error);
-        res.status(401).json({ message: 'Unauthorized - Invalid Token' });
+        return res.status(401).json({ message: 'Unauthorized - Invalid Token' });
     }
 };
+
 
 module.exports = { authenticate };

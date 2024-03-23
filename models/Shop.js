@@ -1,4 +1,3 @@
-// models/shop.js
 const mongoose = require('mongoose');
 
 const shopSchema = new mongoose.Schema({
@@ -13,14 +12,67 @@ const shopSchema = new mongoose.Schema({
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // Reference to the User model
+    ref: 'User',
     required: true,
   },
   products: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product', // Reference to the Product model
   }],
-});
+  address: {
+    // Address information
+    street: {
+      type: String,
+      trim: true,
+    },
+    city: {
+      type: String,
+      trim: true,
+    },
+    state: {
+      type: String,
+      trim: true,
+    },
+    postalCode: {
+      type: String,
+      trim: true,
+    },
+    location: {
+      type: {
+        type: String,
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        default: [0, 0],
+      },
+    },
+  },
+  socialMedia: {
+    facebook: {
+      type: String,
+      trim: true,
+    },
+    twitter: {
+      type: String,
+      trim: true,
+    },
+    instagram: {
+      type: String,
+      trim: true,
+    },
+  },
+  created_at: {
+    type: Date,
+    default: Date.now,
+  },
+  updated_at: {
+    type: Date,
+    default: Date.now,
+  },
+}, { strict: false });
+
+shopSchema.index({ 'address.location': '2dsphere' });
 
 const Shop = mongoose.model('Shop', shopSchema);
 

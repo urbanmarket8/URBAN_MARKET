@@ -3,11 +3,17 @@ const express = require('express');
 const router = express.Router();
 const shopController = require('../controllers/shopController');
 
+const multer = require('multer');
+
+// Define storage for multer
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
 // Define routes
-router.post('/', shopController.createShop);
-router.get('/', shopController.getAllShops);
-router.get('/:id', shopController.getShopById);
-router.put('/:id', shopController.updateShopById);
+router.post('/', upload.none(), shopController.createShop);
+router.get('/', shopController.getShopById);
+router.get('/all', shopController.getAllShop);
+router.put('/', upload.none(), shopController.updateShopById);
 router.delete('/:id', shopController.deleteShopById);
 
 module.exports = router;
