@@ -13,6 +13,10 @@ const orderSchema = new mongoose.Schema({
                 ref: 'Product', // Reference to the Product model
                 required: true,
             },
+            productName: {
+                type: String,
+                required: true,
+            },
             quantity: {
                 type: Number,
                 required: true,
@@ -38,7 +42,7 @@ const orderSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
-});
+}, { strict: false });
 
 const Order = mongoose.model('Order', orderSchema);
 

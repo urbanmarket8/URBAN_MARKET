@@ -62,22 +62,22 @@ const getProductCounts = async (req, res) => {
 const getAllProducts = async (req, res) => {
     try {
         let query = {};
+        const latitude = req.headers['x-user-latitude'];
+        const longitude = req.headers['x-user-longitude'];
+        const { searchText, category, shopId, page = 1, limit = 10, Nearby } = req.body;
 
-        const { searchText, category, shopId, latitude, longitude, page = 1, limit = 10 } = req.body;
         if (searchText && searchText != "") {
             query.name = { $regex: searchText, $options: 'i' };
         }
         if (category && category != "") {
             query.category = category;
         }
-        if (shopId && shopId != "" && query?.category != undefined) {
-            //Get owner Id
+        if (shopId && shopId != "") {
             const shop = await Shop.findById(shopId);
             const ownerId = shop?.owner;
             query.owner = new ObjectId(ownerId);
         }
-        // Find the nearest shop based on provided latitude and longitude
-        if (latitude && longitude && searchText == '' && category == '' && shopId == '') {
+        if (latitude && longitude) {
             const nearestShops = await Shop.find({
                 'address.location': {
                     $near: {
@@ -93,6 +93,8 @@ const getAllProducts = async (req, res) => {
             if (nearestShops.length > 0) {
                 const ownerIds = nearestShops.map(shop => shop.owner.toString());
                 query.owner = { $in: ownerIds };
+            } else {
+                return res.json({ products: [] });
             }
         }
         const skip = (page - 1) * limit;
@@ -126,13 +128,17 @@ const getAllProducts = async (req, res) => {
 
 const createProduct = async (req, res) => {
     try {
-        const { name, description, quantity, category, price, image } = req.body;
+        const { name, description, quantity, category, price } = req.body;
 
-        // Create or update the product
         let product;
         let owner = req.user.userId;
+        let image = [];
+
+        if (req.files && req.files.length > 0) {
+            image = req.files.map(file => file.path); // Map each file to its path
+        }
+
         if (req.params.id) {
-            // Update existing product
             product = await Product.findByIdAndUpdate(
                 req.params.id,
                 { name, description, quantity, category, price, image, owner },
@@ -172,11 +178,6 @@ const updateProductById = async (req, res) => {
     try {
         const productId = req.params.id;
         const { name, description, price, quantity, category } = req.body;
-        console.log(name)
-        console.log(description)
-        console.log(price)
-        console.log(quantity)
-        console.log(category)
         const updatedProduct = await Product.findByIdAndUpdate(
             productId,
             { name, description, price, quantity, category },
@@ -202,6 +203,13 @@ const deleteProductById = async (req, res) => {
         if (!deletedProduct) {
             return res.status(404).json({ message: 'Product not found' });
         }
+
+        // If the product is deleted successfully, remove it from all carts
+        await Cart.updateMany(
+            { 'items.product': productId },
+            { $pull: { items: { product: productId } } }
+        );
+
         res.status(200).json({ message: 'Product deleted successfully', product: deletedProduct });
     } catch (error) {
         console.error('Delete Product by ID Error:', error);

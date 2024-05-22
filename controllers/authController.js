@@ -2,9 +2,9 @@
 const User = require('../models/User');
 const Shop = require('../models/Shop');
 const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = process.env;
+const { JWT_SECRET, CUSTOMER_URL, SHOP_URL, API_URL } = process.env;
 const crypto = require('crypto');
-const sendVerificationEmail = require("../utils/emailConnection")
+const sendEmail = require("../utils/emailConnection")
 const generateVerifyToken = () => {
     return crypto.randomBytes(16).toString('hex');
 };
@@ -17,7 +17,7 @@ const register = async (req, res) => {
         try {
             user.verify_token = generateVerifyToken();
             await user.save();
-            sendVerificationEmail(email, user.verify_token);
+            await sendEmail(email, user.verify_token, API_URL, "verification");
             return res.status(201).json({ message: 'User registered successfully' });
         } catch (validationError) {
             console.log(validationError)
@@ -36,9 +36,7 @@ const register = async (req, res) => {
 const login = async (req, res) => {
     try {
         const { email, password } = req.body.data.attributes;
-        console.log(email)
         const user = await User.findOne({ email: email });
-        console.log(user)
         if (!user || !(await user.comparePassword(password))) {
             return res.status(400).json({
                 errors: [{ detail: "Invalid password..." }],
@@ -82,16 +80,61 @@ const verify = async (req, res) => {
         await user.save();
         if (user.is_owner) {
             const newShop = new Shop({
-                name: `${user.first_name + ' ' + user.last_name}'s Shop`, // You can customize the shop name
+                name: `${user.first_name + ' ' + user.last_name}'s Shop`,
                 owner: user._id,
             });
             await newShop.save();
         }
 
-        return res.redirect('http://localhost:3000/auth/login');
+        const redirectUrl = user.is_owner ? `${SHOP_URL}/auth/login` : `${CUSTOMER_URL}/login`;
+        return res.redirect(redirectUrl);
     } catch (error) {
         console.error('Verification Error:', error);
         res.status(500).json({ message: 'Internal Server Error' });
     }
 };
-module.exports = { register, login, logout, verify };
+
+const forgotPassword = async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        user.verify_token = generateVerifyToken();
+        await user.save();
+
+        await sendEmail(email, user.verify_token, user.is_owner ? SHOP_URL + "/auth" : CUSTOMER_URL, "resetPassword");
+
+        res.status(200).json({ message: "Password reset email sent." });
+    } catch (error) {
+        console.error('Forgot Password Error:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+const resetPassword = async (req, res) => {
+    const { password, token, email } = req.body;
+
+    try {
+        const user = await User.findOne({
+            email: email,
+        });
+
+        if (!user || user.verify_token != token) {
+            return res.status(400).json({ message: "Password reset token is invalid or has expired." });
+        }
+
+        user.password = password;
+        user.verify_token = undefined;
+        await user.save();
+
+        res.status(200).json({ message: "Password has been reset successfully." });
+    } catch (error) {
+        console.error('Reset Password Error:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+};
+
+module.exports = { register, login, logout, verify, forgotPassword, resetPassword };

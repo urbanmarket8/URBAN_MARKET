@@ -3,31 +3,33 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Cart = require('../models/Cart');
 const User = require('../models/User');
+const notificationController = require('./notificationController');
 
 // Place a new order
 const placeOrder = async (req, res) => {
     try {
         const customer = req.user.userId;
 
-        // Find the user's cart
         const cart = await Cart.findOne({ user: customer }).populate('items.product');
 
         if (!cart || cart.items.length === 0) {
             return res.status(400).json({ message: 'Cart is empty. Add items to the cart before placing an order.' });
         }
 
-        // Calculate total price based on cart items
         const totalPrice = cart.items.reduce((total, item) => {
             return total + item.product.price * item.quantity;
         }, 0);
 
-        // Create a new order
         const newOrder = new Order({ customer, items: cart.items, totalPrice });
         await newOrder.save();
 
-        // Clear the user's cart after placing the order
         await Cart.findOneAndUpdate({ user: customer }, { $set: { items: [] } });
 
+        var productId = cart.items[0].product._id;
+        console.log(productId);
+        var product = await Product.findById(productId)
+        console.log(product);
+        await notificationController.createNotification(customer, productId, product.owner, "Create new Order successfully", "success");
         res.status(201).json({ message: 'Order placed successfully', order: newOrder });
     } catch (error) {
         console.error('Place Order Error:', error);

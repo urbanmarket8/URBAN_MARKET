@@ -5,9 +5,15 @@ const User = require('../models/User');
 const getShopNotification = async (req, res) => {
     try {
         let owner = req.user.userId;
-        const notifications = await Notification.find();
-        console.log(notifications);
-        res.json(notifications);
+        const notifications = await Notification.find({ shopId: owner });
+        const notificationsWithUserName = await Promise.all(notifications.map(async (notification) => {
+            const user = await User.findById(notification.userId);
+            return {
+                ...notification.toObject(),
+                userName: user ? user.username : 'Unknown User',
+            };
+        }));
+        res.json(notificationsWithUserName);
     } catch (error) {
         console.error('Get Notifications Error:', error);
         res.status(500).json({ message: 'Internal Server Error' });
@@ -16,8 +22,6 @@ const getShopNotification = async (req, res) => {
 
 const createNotification = async (userId, productId, shopId, message, type) => {
     try {
-        console.log(productId)
-        console.log(shopId)
         const newNotification = new Notification({
             userId,
             productId,

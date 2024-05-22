@@ -13,6 +13,7 @@ const upload = multer({ storage: storage });
 router.post('/', upload.none(), shopController.createShop);
 router.get('/', shopController.getShopById);
 router.get('/all', shopController.getAllShop);
+router.get('/admin', shopController.getAllShopsForAdmin);
 router.put('/', upload.none(), shopController.updateShopById);
 router.delete('/:id', shopController.deleteShopById);
 

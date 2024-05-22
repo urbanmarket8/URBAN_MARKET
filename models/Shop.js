@@ -62,6 +62,10 @@ const shopSchema = new mongoose.Schema({
       trim: true,
     },
   },
+  approved: {
+    type: Boolean,
+    default: false,
+  },
   created_at: {
     type: Date,
     default: Date.now,
