@@ -84,6 +84,7 @@ const verify = async (req, res) => {
                 owner: user._id,
             });
             await newShop.save();
+            //TODO: endpoint gded bt3ml approved 3 l shop 
         }
 
         const redirectUrl = user.is_owner ? `${SHOP_URL}/auth/login` : `${CUSTOMER_URL}/login`;
