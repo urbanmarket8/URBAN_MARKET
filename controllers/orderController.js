@@ -5,6 +5,8 @@ const Cart = require("../models/Cart");
 const User = require("../models/User");
 const notificationController = require("./notificationController");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const endpointSecret = "your_stripe_webhook_secret";
+//Get Order Counts
 
 const getCheckoutSession = async (req, res) => {
   try {
@@ -15,27 +17,96 @@ const getCheckoutSession = async (req, res) => {
       "items.product"
     );
     //2) Create Chechout Session
-
-    const lineItems = cart.items.map((item) => ({
-      name: item.product.name,
-      description: item.product.description,
-      amount: item.product.price * 100,
-      quantity: item.quantity,
-    }));
-
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
+      line_items: items.map((item) => ({
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: item.productName,
+          },
+          unit_amount: item.price * 100,
+        },
+        quantity: item.quantity,
+      })),
+      mode: "payment",
       success_url: `${req.protocol}://${req.get("host")}/`,
       cancel_url: `${req.protocol}://${req.get("host")}/api/v1/cart/`,
-      client_refrence_id: req.params.cartId,
-      line_items: lineItems,
+      customer: customer || req.user.userId,
     });
 
     //3) Create Session as Response
-    res.status(201).json({ message: "Session Created successfully", session });
+    res.json({
+      message: "Session Created successfully",
+      session,
+      id: session.id,
+    });
   } catch (error) {
     console.error("Create Session Error:", error);
     res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+//Handle Webhook Stripe
+const handleStripeWebhook = async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    console.log(`⚠️  Webhook signature verification failed.`, err.message);
+    return res.sendStatus(400);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    try {
+      const session = event.data.object;
+      const customerId = session.customer;
+      const cart = await Cart.findOne({ user: customerId }).populate(
+        "items.product"
+      );
+
+      if (!cart) {
+        console.error("Cart not found for customer:", customerId);
+        return res.status(400).send("Cart not found");
+      }
+
+      const totalPrice = cart.items.reduce((total, item) => {
+        return total + item.product.price * item.quantity;
+      }, 0);
+
+      const newOrder = new Order({
+        customer: customerId,
+        items: cart.items,
+        totalPrice,
+      });
+      await newOrder.save();
+
+      await Cart.findOneAndUpdate(
+        { user: customerId },
+        { $set: { items: [] } }
+      );
+
+      var productId = cart.items[0].product._id;
+      var product = await Product.findById(productId);
+      await notificationController.createNotification(
+        customerId,
+        productId,
+        product.owner,
+        "Create new Order successfully",
+        "success"
+      );
+
+      console.log("Order placed successfully:", newOrder);
+      res.status(200).send("Received webhook");
+    } catch (err) {
+      console.log("Failed to create order:", err);
+      res.status(500).send();
+    }
+  } else {
+    res.status(200).send();
   }
 };
 // Place a new order
@@ -181,4 +252,5 @@ module.exports = {
   updateOrderStatusById,
   getOrdersCounts,
   getCheckoutSession,
+  handleStripeWebhook,
 };

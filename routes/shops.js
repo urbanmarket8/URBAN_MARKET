@@ -18,5 +18,5 @@ router.get("/admin", shopController.getAllShopsForAdmin);
 router.put("/", upload.none(), shopController.updateShopById);
 router.delete("/:id", shopController.deleteShopById);
 router.patch("/:id/approve", shopController.approveShop);
-
+router.get("/counts", shopController.shopsCounts);
 module.exports = router;

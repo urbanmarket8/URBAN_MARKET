@@ -37,10 +37,17 @@ const shopRouter = require("./routes/shops");
 const orderRouter = require("./routes/order");
 const cartRouter = require("./routes/cart");
 const notificationRouter = require("./routes/notification");
+const { handleStripeWebhook } = require("./controllers/orderController");
 
 app.use("/api/v1/auth", authRouter);
 
 app.use(authenticate);
+
+app.post(
+  "/webhook-checkout",
+  express.raw({ type: "application/json" }),
+  handleStripeWebhook
+);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/product", productRouter);
 app.use("/api/v1/shop", shopRouter);
