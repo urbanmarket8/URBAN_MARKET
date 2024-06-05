@@ -9,10 +9,6 @@ router.put("/:orderId/status", orderController.updateOrderStatusById);
 router.get("/order-history/:customerId", orderController.getOrderHistory);
 router.get("/", orderController.getOrders);
 router.get("/counts", orderController.getOrdersCounts);
-router.get("/checkout-session", orderController.getCheckoutSession);
-// router.post(
-//   "/webhook",
-//   bodyParser.raw({ type: "application/json" }),
-//   orderController.handleStripeWebhook
-// );
+router.post("/checkout-session", orderController.getCheckoutSession);
+
 module.exports = router;

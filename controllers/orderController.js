@@ -5,7 +5,7 @@ const Cart = require("../models/Cart");
 const User = require("../models/User");
 const notificationController = require("./notificationController");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-const endpointSecret = "your_stripe_webhook_secret";
+const endpointSecret = "whsec_omar";
 //Get Order Counts
 
 const getCheckoutSession = async (req, res) => {
@@ -16,23 +16,30 @@ const getCheckoutSession = async (req, res) => {
     const cart = await Cart.findOne({ user: customer }).populate(
       "items.product"
     );
+    for (const item of cart.items) {
+      if (item.quantity > item.product.quantity) {
+        return res.status(400).json({
+          message: `Requested quantity for ${item.productName} is not available.`,
+        });
+      }
+    }
     //2) Create Chechout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: items.map((item) => ({
+      line_items: cart.items.map((item) => ({
         price_data: {
-          currency: "usd",
+          currency: "inr",
           product_data: {
             name: item.productName,
           },
-          unit_amount: item.price * 100,
+          unit_amount: item.product.price * 100,
         },
         quantity: item.quantity,
       })),
       mode: "payment",
-      success_url: `${req.protocol}://${req.get("host")}/`,
+      success_url: `http://localhost:8080/api/v1/orders/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.protocol}://${req.get("host")}/api/v1/cart/`,
-      customer: customer || req.user.userId,
+      metadata: { customerId: customer || req.user.userId },
     });
 
     //3) Create Session as Response
@@ -46,24 +53,72 @@ const getCheckoutSession = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+const handleSuccess = async (req, res) => {
+  console.log(req.query);
+  const sessionId = req.query.session_id;
+  console.log("sessionId", sessionId);
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  console.log("session", session);
+  if (session.payment_status) {
+    const customerId = session.metadata.customerId;
+    const cart = await Cart.findOne({ user: customerId }).populate(
+      "items.product"
+    );
 
+    if (!cart) {
+      console.error("Cart not found for customer:", customerId);
+      return res.status(400).send("Cart not found");
+    }
+
+    const totalPrice = cart.items.reduce((total, item) => {
+      return total + item.product.price * item.quantity;
+    }, 0);
+
+    const newOrder = new Order({
+      customer: customerId,
+      items: cart.items,
+      totalPrice,
+    });
+    await newOrder.save();
+
+    await Cart.findOneAndUpdate({ user: customerId }, { $set: { items: [] } });
+
+    var productId = cart.items[0].product._id;
+    var product = await Product.findById(productId);
+    await notificationController.createNotification(
+      customerId,
+      productId,
+      product.owner,
+      "Create new Order successfully",
+      "success"
+    );
+
+    console.log("Order placed successfully:", newOrder);
+    res.redirect("http://localhost:3000/");
+  } else {
+    res.send("Payment not completed.");
+  }
+};
 //Handle Webhook Stripe
 const handleStripeWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
-
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
   let event;
-
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    event = stripe.webhooks.constructEvent(req.body, sig, secret);
   } catch (err) {
-    console.log(`⚠️  Webhook signature verification failed.`, err.message);
-    return res.sendStatus(400);
+    console.error("Webhook Error:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   if (event.type === "checkout.session.completed") {
+    console.log("event", event);
+
     try {
       const session = event.data.object;
-      const customerId = session.customer;
+      console.log("session", session);
+
+      const customerId = session.metda_data.customerId;
       const cart = await Cart.findOne({ user: customerId }).populate(
         "items.product"
       );
@@ -100,15 +155,16 @@ const handleStripeWebhook = async (req, res) => {
       );
 
       console.log("Order placed successfully:", newOrder);
-      res.status(200).send("Received webhook");
+      return res.status(200).send("Received webhook");
     } catch (err) {
       console.log("Failed to create order:", err);
-      res.status(500).send();
+      return res.status(500).send();
     }
   } else {
-    res.status(200).send();
+    return res.status(200).send();
   }
 };
+
 // Place a new order
 const placeOrder = async (req, res) => {
   try {
@@ -253,4 +309,5 @@ module.exports = {
   getOrdersCounts,
   getCheckoutSession,
   handleStripeWebhook,
+  handleSuccess,
 };
