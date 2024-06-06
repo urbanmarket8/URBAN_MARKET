@@ -21,7 +21,6 @@ const authenticate = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(authToken, JWT_SECRET);
-    console.log("decoded :", decoded);
     req.user = decoded;
     next();
   } catch (error) {

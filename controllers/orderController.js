@@ -16,6 +16,13 @@ const getCheckoutSession = async (req, res) => {
     const cart = await Cart.findOne({ user: customer }).populate(
       "items.product"
     );
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({
+        message:
+          "Cart is empty. Add items to your cart before proceeding to checkout.",
+      });
+    }
+
     for (const item of cart.items) {
       if (item.quantity > item.product.quantity) {
         return res.status(400).json({
@@ -23,29 +30,57 @@ const getCheckoutSession = async (req, res) => {
         });
       }
     }
+    const lineItems = cart.items.map((item) => ({
+      price_data: {
+        currency: "inr",
+        product_data: {
+          name: item.productName,
+        },
+        unit_amount: item.product.price * 100,
+      },
+      quantity: item.quantity,
+    }));
+
+    if (!lineItems) {
+      return res.status(400).json({
+        message: "No items to be paid in the cart",
+      });
+    }
+    const totalAmountInRupees = cart.items.reduce((total, item) => {
+      return total + item.product.price * item.quantity;
+    }, 0);
+
+    // Convert total amount from INR to USD
+    const totalAmountInUSD = totalAmountInRupees / 74;
+
+    if (totalAmountInUSD < 0.5) {
+      return res.status(400).json({
+        message:
+          "Total amount for checkout must be at least 50 cents (INR 37.50).",
+      });
+    }
+
     //2) Create Chechout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: cart.items.map((item) => ({
-        price_data: {
-          currency: "inr",
-          product_data: {
-            name: item.productName,
-          },
-          unit_amount: item.product.price * 100,
-        },
-        quantity: item.quantity,
-      })),
+      line_items: lineItems,
       mode: "payment",
-      success_url: `http://localhost:8080/api/v1/orders/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.API_URL}/api/v1/orders/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.protocol}://${req.get("host")}/api/v1/cart/`,
-      metadata: { customerId: customer || req.user.userId },
+      metadata: {
+        customerId: customer || req.user.userId,
+        token: req?.headers?.authorization,
+      },
     });
 
+    if (!session) {
+      return res.status(402).json({
+        message: "Something wrong during checkout..",
+      });
+    }
     //3) Create Session as Response
     res.json({
       message: "Session Created successfully",
-      session,
       id: session.id,
     });
   } catch (error) {
@@ -54,71 +89,12 @@ const getCheckoutSession = async (req, res) => {
   }
 };
 const handleSuccess = async (req, res) => {
-  console.log(req.query);
-  const sessionId = req.query.session_id;
-  console.log("sessionId", sessionId);
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
-  console.log("session", session);
-  if (session.payment_status) {
-    const customerId = session.metadata.customerId;
-    const cart = await Cart.findOne({ user: customerId }).populate(
-      "items.product"
-    );
-
-    if (!cart) {
-      console.error("Cart not found for customer:", customerId);
-      return res.status(400).send("Cart not found");
-    }
-
-    const totalPrice = cart.items.reduce((total, item) => {
-      return total + item.product.price * item.quantity;
-    }, 0);
-
-    const newOrder = new Order({
-      customer: customerId,
-      items: cart.items,
-      totalPrice,
-    });
-    await newOrder.save();
-
-    await Cart.findOneAndUpdate({ user: customerId }, { $set: { items: [] } });
-
-    var productId = cart.items[0].product._id;
-    var product = await Product.findById(productId);
-    await notificationController.createNotification(
-      customerId,
-      productId,
-      product.owner,
-      "Create new Order successfully",
-      "success"
-    );
-
-    console.log("Order placed successfully:", newOrder);
-    res.redirect("http://localhost:3000/");
-  } else {
-    res.send("Payment not completed.");
-  }
-};
-//Handle Webhook Stripe
-const handleStripeWebhook = async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, secret);
-  } catch (err) {
-    console.error("Webhook Error:", err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    const sessionId = req.query.session_id;
 
-  if (event.type === "checkout.session.completed") {
-    console.log("event", event);
-
-    try {
-      const session = event.data.object;
-      console.log("session", session);
-
-      const customerId = session.metda_data.customerId;
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status) {
+      const customerId = session.metadata.customerId;
       const cart = await Cart.findOne({ user: customerId }).populate(
         "items.product"
       );
@@ -153,15 +129,16 @@ const handleStripeWebhook = async (req, res) => {
         "Create new Order successfully",
         "success"
       );
+      const token = session.token;
 
-      console.log("Order placed successfully:", newOrder);
-      return res.status(200).send("Received webhook");
-    } catch (err) {
-      console.log("Failed to create order:", err);
-      return res.status(500).send();
+      res.header("Authorization", token);
+      res.redirect(process.env.CUSTOMER_URL);
+    } else {
+      res.send("Payment not completed.");
     }
-  } else {
-    return res.status(200).send();
+  } catch (error) {
+    console.error("Handle Success Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
@@ -191,9 +168,7 @@ const placeOrder = async (req, res) => {
     await Cart.findOneAndUpdate({ user: customer }, { $set: { items: [] } });
 
     var productId = cart.items[0].product._id;
-    console.log(productId);
     var product = await Product.findById(productId);
-    console.log(product);
     await notificationController.createNotification(
       customer,
       productId,
@@ -216,7 +191,6 @@ const getOrdersCounts = async (req, res) => {
       const counts = await Order.countDocuments();
       return res.status(201).json({ counts });
     } catch (validationError) {
-      console.log(validationError);
       let message = "Validation error";
       for (let key in validationError.errors) {
         message = validationError.errors[key].message;
@@ -308,6 +282,5 @@ module.exports = {
   updateOrderStatusById,
   getOrdersCounts,
   getCheckoutSession,
-  handleStripeWebhook,
   handleSuccess,
 };

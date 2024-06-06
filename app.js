@@ -3,10 +3,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const express = require("express");
 const { authenticate } = require("./middleware/auth");
-const {
-  handleStripeWebhook,
-  handleSuccess,
-} = require("./controllers/orderController");
+const { handleSuccess } = require("./controllers/orderController");
 const connectDB = require("./db/connection");
 const app = express();
 
@@ -19,13 +16,6 @@ const corsOptions = {
 
 // Connect to MongoDB
 connectDB();
-
-// Stripe webhook endpoint with raw body parser
-// app.post(
-//   "/api/v1/orders/webhook-checkout",
-//   express.raw({ type: "application/json" }),
-//   handleStripeWebhook
-// );
 
 // Other middleware
 app.use(cors(corsOptions));

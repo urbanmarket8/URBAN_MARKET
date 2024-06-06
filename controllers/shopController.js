@@ -96,7 +96,6 @@ const getShopById = async (req, res) => {
 const checkAdminStatus = async (userId) => {
   try {
     const user = await User.findById(userId);
-    console.log(user);
     if (!user) return false;
     return user.isAdmin;
   } catch (err) {
